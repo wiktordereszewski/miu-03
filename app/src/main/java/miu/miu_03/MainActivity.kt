@@ -5,7 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -47,9 +49,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
@@ -68,6 +75,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     NumeralSystemConverter()
+                    AddAd()
                 }
             }
         }
@@ -82,7 +90,8 @@ fun NumeralSystemConverter() {
     var selectedSystem by remember { mutableStateOf<NumeralSystem?>(null) }
     var result by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     if (showInfoDialog) {
         AlertDialog(
@@ -94,10 +103,12 @@ fun NumeralSystemConverter() {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Jak korzystać z konwertera:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("1. Wprowadź liczbę całkowitą używając klawiatury numerycznej.")
+                    Text("1. Wprowadź liczbę całkowitą używając klawiatury numerycznej.\nZakres: -2 147 483 648 do 2 147 483 647.")
                     Text("2. Zaznacz system liczbowy, na który chcesz przeliczyć liczbę. Jednocześnie możesz zaznaczyć tylko jeden system liczbowy.")
                     Text("3. Kliknij przycisk 'Przelicz'")
                     Text("4. Wynik przeliczenia zostanie wyświetlony poniżej przycisku 'Przelicz'.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Liczby ujemne są przeliczane na liczby dodatnie w systemie docelowym z uwzględnieniem znaku minus.")
                 }
             },
             confirmButton = {
@@ -129,7 +140,13 @@ fun NumeralSystemConverter() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(24.dp),
+                .padding(24.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                    }
+                },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -152,12 +169,12 @@ fun NumeralSystemConverter() {
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = {  }
+                    onDone = { }
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Wybór systemu liczbowego (radiobutton)
+// Wybór systemu liczbowego (radiobutton)
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -167,7 +184,7 @@ fun NumeralSystemConverter() {
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
 
-                // First row - 4 systems
+                // First row - 3 systems
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -177,8 +194,7 @@ fun NumeralSystemConverter() {
                     val firstRowSystems = listOf(
                         NumeralSystem.BINARY,
                         NumeralSystem.BASE8,
-                        NumeralSystem.DUODECIMAL,
-                        NumeralSystem.HEXADECIMAL
+                        NumeralSystem.DUODECIMAL
                     )
 
                     firstRowSystems.forEach { system ->
@@ -202,7 +218,6 @@ fun NumeralSystemConverter() {
                                     NumeralSystem.BINARY -> "BIN"
                                     NumeralSystem.BASE8 -> "OCT"
                                     NumeralSystem.DUODECIMAL -> "B12"
-                                    NumeralSystem.HEXADECIMAL -> "HEX"
                                     else -> ""
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -213,7 +228,7 @@ fun NumeralSystemConverter() {
                     }
                 }
 
-                // Second row - 4 systems
+                // Second row - 3 systems
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -221,10 +236,9 @@ fun NumeralSystemConverter() {
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     val secondRowSystems = listOf(
+                        NumeralSystem.HEXADECIMAL,
                         NumeralSystem.VIGESIMAL,
-                        NumeralSystem.BASE36,
-                        NumeralSystem.SEXAGESIMAL,
-                        NumeralSystem.BASE64
+                        NumeralSystem.BASE36
                     )
 
                     secondRowSystems.forEach { system ->
@@ -245,10 +259,9 @@ fun NumeralSystemConverter() {
                             )
                             Text(
                                 text = when(system) {
+                                    NumeralSystem.HEXADECIMAL -> "HEX"
                                     NumeralSystem.VIGESIMAL -> "VIG"
                                     NumeralSystem.BASE36 -> "B36"
-                                    NumeralSystem.SEXAGESIMAL -> "B60"
-                                    NumeralSystem.BASE64 -> "B64"
                                     else -> ""
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -264,12 +277,22 @@ fun NumeralSystemConverter() {
             Button(
                 onClick = {
                     if (selectedSystem != null) {
-                        result = intConverter(value.toInt(), selectedSystem!!)
+                        try {
+                            result = intConverter(value.toInt(), selectedSystem!!)
+                            errorMessage = null
+                        } catch (_: NumberFormatException) {
+                            errorMessage = "Wprowadź poprawną liczbę całkowitą"
+                            result = ""
+                        }
+                    } else {
+                        errorMessage = "Wybierz system liczbowy"
+                        result = ""
                     }
                 },
             ) {
                 Text("Przelicz", style = MaterialTheme.typography.bodyLarge)
             }
+            Spacer(modifier = Modifier.height(2.dp))
 
             // Wynik
             Card(
@@ -282,7 +305,7 @@ fun NumeralSystemConverter() {
                 ) {
                     Text(
                         text = "Wynik przeliczenia:",
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -291,13 +314,13 @@ fun NumeralSystemConverter() {
                         Text(
                             text = errorMessage!!,
                             color = MaterialTheme.colorScheme.error,
-                            fontSize = 18.sp,
+                            fontSize = 15.sp,
                             textAlign = TextAlign.Center
                         )
                     } else {
                         Text(
                             text = result,
-                            fontSize = 18.sp,
+                            fontSize = 15.sp,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -305,28 +328,6 @@ fun NumeralSystemConverter() {
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            // Reklama xD (no co, czymś trzeba zapełnić pustkę)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp) // Bardzo mały odstęp
-            ) {
-                Text(
-                    text = "Reklama",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center
-                )
-                Image(
-                    painter = painterResource(id = R.drawable.example_ad),
-                    contentDescription = "Advertisement Banner",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-
-                )
-            }
-
 
         }
 
@@ -339,20 +340,56 @@ fun NumeralSystemConverter() {
 
 }
 
+@Preview
+@Composable
+fun AddAd() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .fillMaxHeight(),
 
-fun intConverter(value: Int, numeralSystem: NumeralSystem): String {
-    return when (numeralSystem) {
-        NumeralSystem.BINARY -> Integer.toBinaryString(value)
-        NumeralSystem.BASE8 -> Integer.toOctalString(value)
-        NumeralSystem.DUODECIMAL -> value.toString(12)
-        NumeralSystem.HEXADECIMAL -> Integer.toHexString(value)
-        NumeralSystem.VIGESIMAL -> value.toString(20)
-        NumeralSystem.BASE36 -> value.toString(36)
-        NumeralSystem.SEXAGESIMAL -> value.toString(60)
-        NumeralSystem.BASE64 -> value.toString(64)
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = "Reklama",
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+            Image(
+                painter = painterResource(id = R.drawable.example_ad),
+                contentDescription = "Advertisement Banner",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+        }
     }
 }
 
+
+fun intConverter(value: Int, numeralSystem: NumeralSystem): String {
+    val isNegative = value < 0
+    val absValue = Math.abs(value.toLong()) // Używamy toLong() aby uniknąć problemu z Integer.MIN_VALUE
+
+    val result = when (numeralSystem) {
+        NumeralSystem.BINARY -> absValue.toString(2)
+        NumeralSystem.BASE8 -> absValue.toString(8)
+        NumeralSystem.DUODECIMAL -> absValue.toString(12)
+        NumeralSystem.HEXADECIMAL -> absValue.toString(16)
+        NumeralSystem.VIGESIMAL -> absValue.toString(20)
+        NumeralSystem.BASE36 -> absValue.toString(36)
+    }
+
+    return if (isNegative) "-$result" else result
+}
+
 enum class NumeralSystem {
-    BINARY, BASE8, DUODECIMAL, HEXADECIMAL, VIGESIMAL, BASE36, SEXAGESIMAL, BASE64
+    BINARY, BASE8, DUODECIMAL, HEXADECIMAL, VIGESIMAL, BASE36
 }
